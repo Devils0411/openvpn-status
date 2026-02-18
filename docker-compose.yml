@@ -4,7 +4,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    hostname: openvpn-status
+    network_mode: host
+    ports:
+      - "1234:1234"
     volumes:
       - /root/antizapret/config/openvpn/log:/etc/openvpn/server/logs:ro # Монтирование папки log-файла OpenVPN
       - /root/openvpn-status/src/data:/root/web/src/data # Монтирование папки с базой данных
