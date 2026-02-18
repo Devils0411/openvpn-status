@@ -1,0 +1,18 @@
+services:
+  openvpn-status:
+    image: devils0411/openvpn-status:1.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    hostname: openvpn-status
+    volumes:
+      - /root/antizapret/config/openvpn/log:/etc/openvpn/server/logs:ro # Монтирование папки log-файла OpenVPN
+      - /root/openvpn-status/src/data:/root/web/src/data # Монтирование папки с базой данных
+    environment:
+      - PORT=1234
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin
+      - INSTALL_BOT=N # Установка телеграмм-бота.
+      - BOT_TOKEN=1
+      - ADMIN_ID=1
+    restart: unless-stopped
