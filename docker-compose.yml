@@ -1,6 +1,7 @@
 services:
   openvpn-status:
     image: devils0411/openvpn-status:1.0
+    container_name: openvpn-status
     build:
       context: .
       dockerfile: Dockerfile
