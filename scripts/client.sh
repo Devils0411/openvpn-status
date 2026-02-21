@@ -15,8 +15,20 @@ handle_error() {
 }
 trap 'handle_error $LINENO "$BASH_COMMAND"' ERR
 
+# Переменные
+DIR_OPENVPN=/root/web/openvpn
+DIR_PKI=$DIR_OPENVPN/pki
+OVPN_FILE_PATH="$DIR_OPENVPN/clients/${CLIENT_NAME}.ovpn"
 export LC_ALL=C
-export EASYRSA_PKI=/etc/openvpn/easyrsa3/pki
+export EASYRSA_PKI=$DIR_PKI
+EASY_RSA=/usr/share/easy-rsa
+INDEX="$DIR_PKI/index.txt"
+umask 022
+
+OPTION="$1"
+CLIENT_NAME="$2"
+export EASYRSA_CERT_EXPIRE=1825
+CERT_IP=dynamic.pool
 
 askClientName(){
 	if ! [[ "$CLIENT_NAME" =~ ^[a-zA-Z0-9_-]{1,32}$ ]]; then
@@ -25,36 +37,6 @@ askClientName(){
 		until [[ "$CLIENT_NAME" =~ ^[a-zA-Z0-9_-]{1,32}$ ]]; do
 			read -rp 'Client name: ' -e CLIENT_NAME
 		done
-	fi
-}
-
-askClientCertExpire(){
-	if ! [[ "$CLIENT_CERT_EXPIRE" =~ ^[0-9]+$ ]] || (( CLIENT_CERT_EXPIRE <= 0 )) || (( CLIENT_CERT_EXPIRE > 3650 )); then
-		echo
-		echo 'Enter client certificate expiration days (1-3650):'
-		until [[ "$CLIENT_CERT_EXPIRE" =~ ^[0-9]+$ ]] && (( CLIENT_CERT_EXPIRE > 0 )) && (( CLIENT_CERT_EXPIRE <= 3650 )); do
-			read -rp 'Certificate expiration days: ' -e -i 3650 CLIENT_CERT_EXPIRE
-		done
-	fi
-}
-
-setServerHost_FileName(){
-	if [[ -z "$1" ]]; then
-		SERVER_HOST="$SERVER_IP"
-	else
-		SERVER_HOST="$1"
-	fi
-
-	FILE_NAME="${CLIENT_NAME#antizapret-}"
-	FILE_NAME="${FILE_NAME#vpn-}"
-	FILE_NAME="${FILE_NAME}-(${SERVER_HOST})"
-}
-
-setServerIP(){
-	SERVER_IP="$(ip route get 1.2.3.4 2>/dev/null | awk '{print $7; exit}')"
-	if [[ -z "$SERVER_IP" ]]; then
-		echo 'Default IPv4 address not found!'
-		exit 2
 	fi
 }
 
@@ -70,118 +52,217 @@ render() {
 	done < "$1"
 }
 
-initOpenVPN(){
-	mkdir -p /etc/openvpn/easyrsa3
+addOpenVPN(){
 
-	if [[ ! -f /etc/openvpn/easyrsa3/pki/ca.crt ]] || \
-	   [[ ! -f /etc/openvpn/easyrsa3/pki/issued/antizapret-server.crt ]] || \
-	   [[ ! -f /etc/openvpn/easyrsa3/pki/private/antizapret-server.key ]]; then
-		rm -rf /etc/openvpn/easyrsa3/pki
-		rm -rf /etc/openvpn/server/keys
-		rm -rf /etc/openvpn/client/keys
-		/usr/share/easy-rsa/easyrsa init-pki
-		EASYRSA_CA_EXPIRE=3650 /usr/share/easy-rsa/easyrsa --batch --req-cn='AntiZapret CA' build-ca nopass
-		EASYRSA_CERT_EXPIRE=3650 /usr/share/easy-rsa/easyrsa --batch build-server-full 'antizapret-server' nopass
-	fi
+# Check if 2FA was specified. If not - set to none.
+if [ -z "$TFA_NAME" ]; then
+    TFA_NAME="none"
+fi
 
-	mkdir -p /etc/openvpn/server/keys
-	mkdir -p /etc/openvpn/client/keys
+if [[ ! -f $DIR_OPENVPN/clients/$CLIENT_NAME.ovpn ]]; then
 
-	if [[ ! -f /etc/openvpn/server/keys/ca.crt ]] || \
-	   [[ ! -f /etc/openvpn/server/keys/antizapret-server.crt ]] || \
-	   [[ ! -f /etc/openvpn/server/keys/antizapret-server.key ]]; then
-		cp /etc/openvpn/easyrsa3/pki/ca.crt /etc/openvpn/server/keys/ca.crt
-		cp /etc/openvpn/easyrsa3/pki/issued/antizapret-server.crt /etc/openvpn/server/keys/antizapret-server.crt
-		cp /etc/openvpn/easyrsa3/pki/private/antizapret-server.key /etc/openvpn/server/keys/antizapret-server.key
-	fi
+export EASYRSA_BATCH=1
+#echo 'Патчим easy-rsa.3.1.1 openssl-easyrsa.cnf...' 
+sed -i '/serialNumber_default/d' "$EASY_RSA/openssl-easyrsa.cnf"
 
-	if [[ ! -f /etc/openvpn/server/keys/crl.pem ]]; then
-		EASYRSA_CRL_DAYS=3650 /usr/share/easy-rsa/easyrsa gen-crl
-		chmod 644 /etc/openvpn/easyrsa3/pki/crl.pem
-		cp /etc/openvpn/easyrsa3/pki/crl.pem /etc/openvpn/server/keys/crl.pem
-	fi
+echo 'Генерируем новый сертификат для клиента'
+echo -e "Используем следующие параметры: \nEASYRSA_CERT_EXPIRE: $EASYRSA_CERT_EXPIRE\nEASYRSA_REQ_EMAIL: $EASYRSA_REQ_EMAIL" #\nEASYRSA_REQ_COUNTRY: $EASYRSA_REQ_COUNTRY\nEASYRSA_REQ_PROVINCE: $EASYRSA_REQ_PROVINCE\nEASYRSA_REQ_CITY: 	$EASYRSA_REQ_CITY\nEASYRSA_REQ_ORG: $EASYRSA_REQ_ORG\nEASYRSA_REQ_OU: $EASYRSA_REQ_OU"
+echo -e "EasyRSA VARS will be used:\n$(cat $DIR_PKI/vars)"
+
+$EASY_RSA/easyrsa --batch --req-cn="$CLIENT_NAME" --days="$EASYRSA_CERT_EXPIRE" --req-email="$EASYRSA_REQ_EMAIL" gen-req "$CLIENT_NAME" nopass 
+#subject="/C=$EASYRSA_REQ_COUNTRY/ST=$EASYRSA_REQ_PROVINCE/L=\"$EASYRSA_REQ_CITY\"/O=\"$EASYRSA_REQ_ORG\"/OU=\"$EASYRSA_REQ_OU\""
+        
+$EASY_RSA/easyrsa sign-req client "$CLIENT_NAME"
+# Fix for /name in index.txt
+echo "Правим БД..."
+sed -i'.bak' "$ s/$/\/name=${CLIENT_NAME}\/LocalIP=${CERT_IP}\/2FAName=${TFA_NAME}/" "$INDEX"
+echo "БД скорректирована:"
+tail -1 $INDEX
+# Certificate properties
+CA="$(cat $DIR_PKI/ca.crt )"
+CERT="$(awk '/-----BEGIN CERTIFICATE-----/{flag=1;next}/-----END CERTIFICATE-----/{flag=0}flag' $DIR_PKI/issued/${CLIENT_NAME}.crt | tr -d '\0')"
+KEY="$(cat $DIR_PKI/private/${CLIENT_NAME}.key)"
+TLS_AUTH="$(cat $DIR_PKI/ta.key)"
+
+echo 'Корректируем права доступа к pki/issued...'
+chmod +r $DIR_PKI/issued
+
+echo 'Генерация .ovpn файла...'
+echo "$(cat $DIR_OPENVPN/config/client.conf)
+<ca>
+$CA
+</ca>
+<cert>
+$CERT
+</cert>
+<key>
+$KEY
+</key>
+<tls-auth>
+$TLS_AUTH
+</tls-auth>
+" > "$DIR_OPENVPN/clients/${CLIENT_NAME}.ovpn"
+
+echo -e "Клиентский сертификат успешно сгенерирован!\nПроверь $DIR_OPENVPN/clients/${CLIENT_NAME}.ovpn"
+
+else
+
+CERT_SERIAL=$(grep -E "/name=$CLIENT_NAME/" "$INDEX" | awk '{print $3}')
+export EASYRSA_BATCH=1
+
+# Обновление сертификата.
+echo "Обновление сертификата: $CLIENT_NAME с $TFA_NAME с локальным IP: $CERT_IP и серийным номером: $CERT_SERIAL"
+$EASY_RSA/easyrsa renew "$CLIENT_NAME"
+ 
+# Скорректировать новое /name в index.txt (adding name and ip to the last line)
+sed -i'.bak' "$ s/$/\/name=${CLIENT_NAME}\/LocalIP=${CERT_IP}\/2FAName=${TFA_NAME}/" $INDEX
+echo 'Все готово!'
+
+fi
 }
 
-addOpenVPN(){
-	setServerHost_FileName "$OPENVPN_HOST"
+revokeOpenVPN(){
 
-	if [[ ! -f /etc/openvpn/easyrsa3/pki/issued/"$CLIENT_NAME".crt ]] || \
-	   [[ ! -f /etc/openvpn/easyrsa3/pki/private/"$CLIENT_NAME".key ]]; then
-		askClientCertExpire
-		echo
-		EASYRSA_CERT_EXPIRE="$CLIENT_CERT_EXPIRE" /usr/share/easy-rsa/easyrsa --batch build-client-full "$CLIENT_NAME" nopass
-	else
-		echo
-		echo 'Client with that name already exists! Please enter different name for new client'
-		echo
-		if [[ "$CLIENT_CERT_EXPIRE" != "0" ]]; then
-			echo 'Current client certificate expiration period:'
-			openssl x509 -in /etc/openvpn/easyrsa3/pki/issued/"$CLIENT_NAME".crt -noout -dates
-			echo
-			echo "Attention! Certificate renewal is NOT possible after 'notAfter' date"
-			askClientCertExpire
-			echo
-			rm -f /etc/openvpn/easyrsa3/pki/issued/"$CLIENT_NAME".crt
-			/usr/share/easy-rsa/easyrsa --batch --days="$CLIENT_CERT_EXPIRE" sign client "$CLIENT_NAME"
-			rm -f /etc/openvpn/client/keys/"$CLIENT_NAME".crt
-		fi
-	fi
+PERSHIY=`cat $INDEX | grep "/CN=$CLIENT_NAME/" | head -1 | awk '{ print $3}'`
+CERT_SERIAL=$(grep -E "/name=$CLIENT_NAME/" "$INDEX" | awk '{print $3}')
 
-	if [[ ! -f /etc/openvpn/client/keys/"$CLIENT_NAME".crt ]] || \
-	   [[ ! -f /etc/openvpn/client/keys/"$CLIENT_NAME".key ]]; then
-		cp /etc/openvpn/easyrsa3/pki/issued/"$CLIENT_NAME".crt /etc/openvpn/client/keys/"$CLIENT_NAME".crt
-		cp /etc/openvpn/easyrsa3/pki/private/"$CLIENT_NAME".key /etc/openvpn/client/keys/"$CLIENT_NAME".key
-	fi
+export EASYRSA_BATCH=1
 
-	CA_CERT="$(grep -A 999 'BEGIN CERTIFICATE' -- "/etc/openvpn/server/keys/ca.crt")"
-	CLIENT_CERT="$(grep -A 999 'BEGIN CERTIFICATE' -- "/etc/openvpn/client/keys/$CLIENT_NAME.crt")"
-	CLIENT_KEY="$(cat -- "/etc/openvpn/client/keys/$CLIENT_NAME.key")"
-	if [[ ! "$CA_CERT" ]] || [[ ! "$CLIENT_CERT" ]] || [[ ! "$CLIENT_KEY" ]]; then
-		echo 'Cannot load client keys!'
-		exit 3
-	fi
+# Проверяем, если у пользователя 2 сертификата в index.txt
+if [[ $(cat $INDEX | grep -c "/CN=$CLIENT_NAME/") -eq 2 ]]; then
+    # Проверьте, совпадает ли первый серийный номер с запрошенным для отзыва, и если да, отмените новый сертификат и старый сертификат
+    if [[ $PERSHIY = $CERT_SERIAL ]]; then
+        echo "Отзыв обновленного сертификата..."
 
-	render "/etc/openvpn/client/templates/antizapret-udp.conf" > "/root/antizapret/client/openvpn/antizapret-udp/antizapret-$FILE_NAME-udp.ovpn"
-	render "/etc/openvpn/client/templates/antizapret-tcp.conf" > "/root/antizapret/client/openvpn/antizapret-tcp/antizapret-$FILE_NAME-tcp.ovpn"
-	render "/etc/openvpn/client/templates/antizapret.conf" > "/root/antizapret/client/openvpn/antizapret/antizapret-$FILE_NAME.ovpn"
-	render "/etc/openvpn/client/templates/vpn-udp.conf" > "/root/antizapret/client/openvpn/vpn-udp/vpn-$FILE_NAME-udp.ovpn"
-	render "/etc/openvpn/client/templates/vpn-tcp.conf" > "/root/antizapret/client/openvpn/vpn-tcp/vpn-$FILE_NAME-tcp.ovpn"
-	render "/etc/openvpn/client/templates/vpn.conf" > "/root/antizapret/client/openvpn/vpn/vpn-$FILE_NAME.ovpn"
+        # Удаляем конец строки, начиная с /name=$NAME, для строки, соответствующей шаблону $serial
+        sed  -i'.bak' "/$CERT_SERIAL/s/\/name=$CLIENT_NAME.*//" $INDEX
+        echo "index.txt исправлен"
+     
+        #перемещение нового сертификата в старую директорию
+        echo "Выполняется: easyrsa Отзыв обновленного $CLIENT_NAME"
+        # Отзыв обновленного сертификата
+        $EASY_RSA/easyrsa revoke-renewed "$CLIENT_NAME"
+        echo -e "Старый сертификат отозван! \nУдаляем старый сертификат из БД"
 
-	echo "OpenVPN profile files (re)created for client '$CLIENT_NAME' at /root/antizapret/client/openvpn"
+        # Удаляем старый сертификат из БД
+        sed -i'.bak' "/${CERT_SERIAL}/d" $INDEX
+        echo "Старый сертификат с серийным номером $CERT_SERIAL удален из БД"
+
+        # Удаляем *.ovpn файл, потому что сертификат уже не действующий
+        echo "Удаляем *.ovpn файл"
+        rm -f $OVPN_FILE_PATH
+    
+        echo 'Генерируем новый .ovpn файл...'
+        CA="$(cat $DIR_PKI/ca.crt )"
+        CERT="$(cat $DIR_PKI/issued/${CLIENT_NAME}.crt | grep -zEo -e '-----BEGIN CERTIFICATE-----(\n|.)*-----END CERTIFICATE-----' | tr -d '\0')"
+        KEY="$(cat $DIR_PKI/private/${CLIENT_NAME}.key)"
+        TLS_AUTH="$(cat $DIR_PKI/ta.key)"
+        echo "$(cat $DIR_OPENVPN/config/client.conf)
+<ca>
+$CA
+</ca>
+<cert>
+$CERT
+</cert>
+<key>
+$KEY
+</key>
+<tls-auth>
+$TLS_AUTH
+</tls-auth>
+" > "$OVPN_FILE_PATH"
+        echo -e "Старый сертификат отозван!\nСоздаем новый список отзыва сертификатов (CRL)..."
+        $EASY_RSA/easyrsa gen-crl
+        chmod +r $DIR_PKI/crl.pem
+    else
+        # Исправляем index.txt, удалив пользователя из списка по серийному номеру
+        echo "Перемещаем новый сертификат..."
+        mv $DIR_PKI/renewed/issued/$CLIENT_NAME.crt  $DIR_PKI/issued/$CLIENT_NAME.crt
+        rm -f $DIR_PKI/inline/$CLIENT_NAME.inline
+        # Удаляем старый сертификат из базы
+        sed -i'.bak' "/${CERT_SERIAL}/d" $INDEX
+        echo -e "Новый сертификат отозван!\nСоздаем новый список отзыва сертификатов (CRL)..."
+        $EASY_RSA/easyrsa gen-crl
+        chmod +r $DIR_PKI/crl.pem
+    fi
+else
+    echo "Отзываем сертификат..."
+    # Удаляем конец строки, начиная с /name=$NAME, для строки, соответствующей шаблону $serial
+    sed  -i'.bak' "/$CERT_SERIAL/s/\/name=$CLIENT_NAME.*//" $INDEX
+    # Отзываем сертификат
+    $EASY_RSA/easyrsa revoke "$CLIENT_NAME"
+
+    echo 'Создаем новый список отзыва сертификатов (CRL)...'
+    $EASY_RSA/easyrsa gen-crl
+    chmod +r $DIR_PKI/crl.pem
+    # restoring the index.txt, new /name in index.txt (adding name and ip to the last line)
+    #sed -i'.bak' "$ s/$/\/name=${CLIENT_NAME}\/LocalIP=${CERT_IP}\/2FAName=${TFA_NAME}/" $INDEX
+    # Добавляем имя, ip  и 2FA-name в тот же CERT serial
+    sed -i'.bak' "/${CERT_SERIAL}/ s/$/\/name=${CLIENT_NAME}\/LocalIP=${CERT_IP}\/2FAName=${TFA_NAME}/" $INDEX
+fi
+
+echo -e 'Готово!\nЕсли вы хотите отключить пользователя, перезапустите службу с помощью команды: docker-compose restart openvpn.'
 }
 
 deleteOpenVPN(){
-	setServerHost_FileName "$OPENVPN_HOST"
-	echo
 
-	/usr/share/easy-rsa/easyrsa --batch revoke "$CLIENT_NAME"
-	EASYRSA_CRL_DAYS=3650 /usr/share/easy-rsa/easyrsa gen-crl
-	chmod 644 /etc/openvpn/easyrsa3/pki/crl.pem
-	cp /etc/openvpn/easyrsa3/pki/crl.pem /etc/openvpn/server/keys/crl.pem
+CERT_SERIAL=$(grep -E "/name=$CLIENT_NAME/" "$INDEX" | awk '{print $3}')
+echo "Удаляем пользователя: $CLIENT_NAME с серийным номером: $CERT_SERIAL"
 
-	rm -f /root/antizapret/client/openvpn/antizapret/antizapret-"$FILE_NAME".ovpn
-	rm -f /root/antizapret/client/openvpn/antizapret-udp/antizapret-"$FILE_NAME"-udp.ovpn
-	rm -f /root/antizapret/client/openvpn/antizapret-tcp/antizapret-"$FILE_NAME"-tcp.ovpn
-	rm -f /root/antizapret/client/openvpn/vpn/vpn-"$FILE_NAME".ovpn
-	rm -f /root/antizapret/client/openvpn/vpn-udp/vpn-"$FILE_NAME"-udp.ovpn
-	rm -f /root/antizapret/client/openvpn/vpn-tcp/vpn-"$FILE_NAME"-tcp.ovpn
-	rm -f /etc/openvpn/client/keys/"$CLIENT_NAME".crt
-	rm -f /etc/openvpn/client/keys/"$CLIENT_NAME".key
+# Определяем, действителен сертификат или отозван
+STATUS_CH=$(grep -e ${CLIENT_NAME}$ -e${CLIENT_NAME}/ ${INDEX} | awk '{print $1}' | tr -d '\n')
+if [[ $STATUS_CH = "V" ]]; then
+    echo "Сертификат действующий\nНе следует удалять: $CLIENT_NAME с серийным номером: $CERT_SERIAL\nВыходим..."
+    exit 1
+else
+    echo "Сертификат отозван\nПродолжаем удаление: $CLIENT_NAME с серийным номером: $CERT_SERIAL"
+fi
 
-	echo "kill $CLIENT_NAME" | socat - UNIX-CONNECT:/run/openvpn-server/antizapret-udp.sock &>/dev/null || true
-	echo "kill $CLIENT_NAME" | socat - UNIX-CONNECT:/run/openvpn-server/antizapret-tcp.sock &>/dev/null || true
-	echo "kill $CLIENT_NAME" | socat - UNIX-CONNECT:/run/openvpn-server/vpn-udp.sock &>/dev/null || true
-	echo "kill $CLIENT_NAME" | socat - UNIX-CONNECT:/run/openvpn-server/vpn-tcp.sock &>/dev/null || true
+# Проверяем, если у пользователя 2 сертификата в index.txt
+if [[ $(cat $INDEX | grep -c "/CN=$CLIENT_NAME/") -eq 2 ]]; then
+    echo "Удаляем обновленного сертификата..."
+    sed -i'.bak' "/${CERT_SERIAL}/d" $INDEX
+    # Удаляем файл *.ovpn, так как он содержит старый сертификат
+    rm -f $OVPN_FILE_PATH
+    
+    echo 'Генерируем новый .ovpn файл...'
+    CA="$(cat $DIR_PKI/ca.crt )"
+    CERT="$(cat $DIR_PKI/issued/${CLIENT_NAME}.crt | grep -zEo -e '-----BEGIN CERTIFICATE-----(\n|.)*-----END CERTIFICATE-----' | tr -d '\0')"
+    KEY="$(cat $DIR_PKI/private/${CLIENT_NAME}.key)"
+    TLS_AUTH="$(cat $DIR_PKI/ta.key)"
+    echo "$(cat $OPENVPN_DIR/config/client.conf)
+<ca>
+$CA
+</ca>
+<cert>
+$CERT
+</cert>
+<key>
+$KEY
+</key>
+<tls-auth>
+$TLS_AUTH
+</tls-auth>
+" > "$OVPN_FILE_PATH"
+    echo "Новый .ovpn файл создан."
 
-	echo "OpenVPN client '$CLIENT_NAME' successfully deleted"
+else
+    echo "Удаляем сертификат...\nУдаляем *.ovpn файл" 
+    rm -f $OVPN_FILE_PATH
+    # Удаляем пользователя из списка по серийному номеру
+    sed -i'.bak' "/${CERT_SERIAL}/d" $INDEX
+    echo "БД скорректирована."
+fi
+
+echo 'Удаление завершено!\nЕсли вы хотите отключить пользователя, перезапустите службу с помощью команды: docker-compose restart openvpn.'
+
 }
 
 listOpenVPN(){
 	[[ -n "$CLIENT_NAME" ]] && return
 	echo
 	echo 'OpenVPN client names:'
-	ls /etc/openvpn/easyrsa3/pki/issued | sed 's/\.crt$//' | grep -v "^antizapret-server$" | sort
+	ls $DIR_PKI/issued | sed 's/\.crt$//' | grep -v "^antizapret-server$" | sort
 }
 
 initWireGuard(){
@@ -239,8 +320,8 @@ AllowedIPs = ${CLIENT_IP}/32
 		wg syncconf antizapret <(wg-quick strip antizapret 2>/dev/null) &>/dev/null || true
 	fi
 
-	render "/etc/wireguard/templates/antizapret-client-wg.conf" > "/root/antizapret/client/wireguard/antizapret/antizapret-$FILE_NAME-wg.conf"
-	render "/etc/wireguard/templates/antizapret-client-am.conf" > "/root/antizapret/client/amneziawg/antizapret/antizapret-$FILE_NAME-am.conf"
+	render "/etc/wireguard/templates/antizapret-client-wg.conf" > "/root/antizapret/client/wireguard/antizapret/antizapret-$CLIENT_NAME-wg.conf"
+	render "/etc/wireguard/templates/antizapret-client-am.conf" > "/root/antizapret/client/amneziawg/antizapret/antizapret-$CLIENT_NAME-am.conf"
 
 	# VPN
 
@@ -276,8 +357,8 @@ AllowedIPs = ${CLIENT_IP}/32
 		wg syncconf vpn <(wg-quick strip vpn 2>/dev/null) &>/dev/null || true
 	fi
 
-	render "/etc/wireguard/templates/vpn-client-wg.conf" > "/root/antizapret/client/wireguard/vpn/vpn-$FILE_NAME-wg.conf"
-	render "/etc/wireguard/templates/vpn-client-am.conf" > "/root/antizapret/client/amneziawg/vpn/vpn-$FILE_NAME-am.conf"
+	render "/etc/wireguard/templates/vpn-client-wg.conf" > "/root/antizapret/client/wireguard/vpn/vpn-$CLIENT_NAME-wg.conf"
+	render "/etc/wireguard/templates/vpn-client-am.conf" > "/root/antizapret/client/amneziawg/vpn/vpn-$CLIENT_NAME-am.conf"
 
 	echo "WireGuard/AmneziaWG profile files (re)created for client '$CLIENT_NAME' at /root/antizapret/client/wireguard and /root/antizapret/client/amneziawg"
 	echo
@@ -299,8 +380,8 @@ deleteWireGuard(){
 	sed -i '/^$/N;/^\n$/D' /etc/wireguard/antizapret.conf
 	sed -i '/^$/N;/^\n$/D' /etc/wireguard/vpn.conf
 
-	rm -f /root/antizapret/client/{wireguard,amneziawg}/antizapret/antizapret-"$FILE_NAME"-*.conf
-	rm -f /root/antizapret/client/{wireguard,amneziawg}/vpn/vpn-"$FILE_NAME"-*.conf
+	rm -f /root/antizapret/client/{wireguard,amneziawg}/antizapret/antizapret-"$CLIENT_NAME"-*.conf
+	rm -f /root/antizapret/client/{wireguard,amneziawg}/vpn/vpn-"$CLIENT_NAME"-*.conf
 
 	wg syncconf antizapret <(wg-quick strip antizapret 2>/dev/null) &>/dev/null || true
 	wg syncconf vpn <(wg-quick strip vpn 2>/dev/null) &>/dev/null || true
@@ -317,28 +398,6 @@ listWireGuard(){
 
 recreate(){
 	echo
-
-	find /root/antizapret/client -type f -delete
-
-	# OpenVPN
-	if [[ -d /etc/openvpn/easyrsa3/pki/issued ]]; then
-		initOpenVPN
-		CLIENT_CERT_EXPIRE=0
-		ls /etc/openvpn/easyrsa3/pki/issued | sed 's/\.crt$//' | grep -v "^antizapret-server$" | sort | while read -r CLIENT_NAME; do
-			if [[ "$CLIENT_NAME" =~ ^[a-zA-Z0-9_-]{1,32}$ ]]; then
-				addOpenVPN >/dev/null
-				echo "OpenVPN profile files recreated for client '$CLIENT_NAME'"
-			else
-				echo "OpenVPN client name '$CLIENT_NAME' is invalid! No profile files recreated"
-			fi
-		done
-	else
-		CLIENT_NAME=antizapret-client
-		CLIENT_CERT_EXPIRE=3650
-		echo "Creating OpenVPN server keys and first OpenVPN client: '$CLIENT_NAME'"
-		initOpenVPN
-		addOpenVPN >/dev/null
-	fi
 
 	# WireGuard/AmneziaWG
 	if [[ -f /etc/wireguard/key && -f /etc/wireguard/antizapret.conf && -f /etc/wireguard/vpn.conf ]]; then
@@ -358,41 +417,7 @@ recreate(){
 	fi
 }
 
-backup(){
-	echo
-
-	rm -rf /root/antizapret/backup
-	mkdir -p /root/antizapret/backup/wireguard
-	mkdir -p /root/antizapret/backup/config
-	mkdir -p /root/antizapret/backup/knot-resolver
-	mkdir -p /root/antizapret/backup/custom
-
-	cp -r /etc/openvpn/easyrsa3 /root/antizapret/backup
-	cp -r /etc/wireguard/antizapret.conf /root/antizapret/backup/wireguard
-	cp -r /etc/wireguard/vpn.conf /root/antizapret/backup/wireguard
-	cp -r /etc/wireguard/key /root/antizapret/backup/wireguard
-	cp -r /root/antizapret/config/*.txt /root/antizapret/backup/config
-	cp -r /etc/knot-resolver/*.lua /root/antizapret/backup/knot-resolver
-	cp -r /root/antizapret/custom*.sh /root/antizapret/backup/custom
-
-	BACKUP_FILE="/root/antizapret/backup-$SERVER_IP.tar.gz"
-	tar -czf $BACKUP_FILE -C /root/antizapret/backup easyrsa3 wireguard config knot-resolver custom
-	tar -tzf $BACKUP_FILE >/dev/null
-
-	rm -rf /root/antizapret/backup
-
-	echo "Backup configuration and clients (re)created at $BACKUP_FILE"
-}
-
-source /root/antizapret/setup
-umask 022
-setServerIP
-
-OPTION="$1"
-CLIENT_NAME="$2"
-CLIENT_CERT_EXPIRE="$3"
-
-if ! [[ "$OPTION" =~ ^[1-8]$ ]]; then
+if ! [[ "$OPTION" =~ ^[1-7]$ ]]; then
 	echo
 	echo 'Please choose option:'
 	echo '    1) OpenVPN - Add client/Renew client certificate'
@@ -402,23 +427,22 @@ if ! [[ "$OPTION" =~ ^[1-8]$ ]]; then
 	echo '    5) WireGuard/AmneziaWG - Delete client'
 	echo '    6) WireGuard/AmneziaWG - List clients'
 	echo '    7) (Re)create client profile files'
-	echo '    8) Backup configuration and clients'
-	until [[ "$OPTION" =~ ^[1-8]$ ]]; do
-		read -rp 'Option choice [1-8]: ' -e OPTION
+	until [[ "$OPTION" =~ ^[1-7]$ ]]; do
+		read -rp 'Option choice [1-7]: ' -e OPTION
 	done
 fi
 
 case "$OPTION" in
 	1)
-		echo "OpenVPN - Add client/Renew client certificate $CLIENT_NAME $CLIENT_CERT_EXPIRE"
+		echo "OpenVPN - Добавление/Обновление сертификата клиента $CLIENT_NAME"
 		askClientName
-		initOpenVPN
 		addOpenVPN
 		;;
 	2)
 		echo "OpenVPN - Delete client $CLIENT_NAME"
 		listOpenVPN
 		askClientName
+                revokeOpenVPN
 		deleteOpenVPN
 		;;
 	3)
@@ -444,10 +468,6 @@ case "$OPTION" in
 	7)
 		echo '(Re)create client profile files'
 		recreate
-		;;
-	8)
-		echo 'Backup configuration and clients'
-		backup
 		;;
 esac
 exit 0

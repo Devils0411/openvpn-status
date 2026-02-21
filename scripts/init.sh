@@ -30,6 +30,16 @@ cat <<EOF | tee $SERVICE_FILE
 user=root
 nodaemon=true
 
+[rpcinterface:supervisor]
+supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
+
+[unix_http_server]
+file=/var/run/supervisor.sock
+chmod=0700
+
+[supervisorctl]
+serverurl=unix:///var/run/supervisor.sock
+
 [program:gunicorn]
 command=gunicorn -w 4 main:app -b 0.0.0.0:$PORT
 directory=$ROOT_DIR
