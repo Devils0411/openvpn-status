@@ -349,15 +349,18 @@ def stop_telegram_bot():
 
 def get_telegram_bot_status():
     try:
+        # Выполняем команду supervisorctl status для конкретной службы
         result = subprocess.run(
-            ["/bin/systemctl", "is-active", BOT_SERVICE_NAME],
+            ["supervisorctl", "status", "telegram-bot"],
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
+        
+        # Получаем вывод команды
         status = result.stdout.strip()
-        return status == "active"
+        return status == "RUNNING"
     except Exception:
         return False
 

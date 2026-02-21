@@ -1,6 +1,6 @@
 services:
   openvpn-status:
-    image: devils0411/openvpn-status:1.0
+    image: devils0411/openvpn-status:latest
     container_name: openvpn-status
     build:
       context: .
@@ -11,6 +11,7 @@ services:
     volumes:
       - /root/antizapret/config/openvpn/log:/etc/openvpn/server/logs:ro # Монтирование папки log-файла OpenVPN
       - /root/openvpn-status/src/data:/root/web/src/data # Монтирование папки с базой данных
+      - /root/antizapret/config/openvpn:/root/web/openvpn #Монтирование папки
     environment:
       - PORT=1234
       - ADMIN_USERNAME=admin
