@@ -782,7 +782,7 @@ def create_confirmation_keyboard(client_name, vpn_type):
 async def execute_script(option: str, client_name: str = None, days: str = None):
     """Выполняет shell-скрипт для управления VPN-клиентами."""
     # Путь к скрипту
-    script_path = "/root/antizapret/client.sh"
+    script_path = os.path.join(os.path.dirname(__file__), '../scripts/client.sh')
 
     # Проверяем, существует ли файл
     if not os.path.exists(script_path):
@@ -1989,45 +1989,46 @@ async def get_server_stats():
 async def get_service_state(service_name: str) -> str:
     try:
         process = await asyncio.create_subprocess_exec(
-            "/bin/systemctl",
-            "is-active",
+            "supervisorctl",
+            "status",
             service_name,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await process.communicate()
         state = stdout.decode().strip()
-
-        if state not in ("active", "inactive", "failed"):
-            return "unknown"
-
-        return state
-    except Exception:
-        return "unknown"
-
+        # Проверяем состояние службы
+        if "RUNNING" in state:
+            return "активен"
+        elif "STARTING" in state:
+            return "запускается"
+        elif "STOPPED" in state:
+            return "неактивен"
+        elif "FATAL" in state or "BACKOFF" in state:
+            return "ошибка"
+        else:
+            return "неизвестно"
+    except Exception as e:
+        print(f"Ошибка при выполнении команды: {e}")
+        return "неизвестно"
 
 
 async def get_services_status_text():
     services = [
-        ("StatusOpenVPN", "StatusOpenVPN.service"),
-        ("Telegram bot", "telegram-bot.service"),
+        ("StatusOpenVPN", "logs"),
+        ("Telegram bot", "telegram-bot"),
     ]
     lines = ["<b>⚙️ Службы StatusOpenVPN:</b>", ""]
     for label, service in services:
         state = await get_service_state(service)
-        icon = "🟢" if state == "active" else "🔴" if state == "inactive" else "🟡"
+        icon = "🟢" if state == "активен" else "🔴" if state == "неактивен" else "🟡"
         lines.append(f"{icon} <b>{label}:</b> {state}")
     return "\n".join(lines)
 
 
 def get_openvpn_online_clients():
     clients = set()
-    file_paths = [
-        "/etc/openvpn/server/logs/antizapret-udp-status.log",
-        "/etc/openvpn/server/logs/antizapret-tcp-status.log",
-        "/etc/openvpn/server/logs/vpn-udp-status.log",
-        "/etc/openvpn/server/logs/vpn-tcp-status.log",
-    ]
+    file_paths = Config.LOG_FILES
     for file_path in file_paths:
         try:
             with open(file_path, "r", encoding="utf-8") as file:
