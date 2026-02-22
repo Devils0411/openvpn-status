@@ -287,7 +287,6 @@ class VPNSetup(StatesGroup):
 
     choosing_option = State()  # Состояние выбора опции (добавление/удаление клиента).
     entering_client_name = State()  # Состояние ввода имени клиента.
-    entering_days = State()  # Состояние ввода количества дней для сертификата.
     deleting_client = State()  # Состояние подтверждения удаления клиента.
     list_for_delete = State()  # Состояние выбора клиента из списка для удаления.
     choosing_config_type = State()  # Состояние для выбора конфигурации
@@ -511,16 +510,7 @@ def create_openvpn_protocol_menu(interface: str, client_name: str):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Стандартный (auto)",
-                    callback_data=f"send_ovpn_{interface}_default_{client_name}",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="TCP", callback_data=f"send_ovpn_{interface}_tcp_{client_name}"
-                ),
-                InlineKeyboardButton(
-                    text="UDP", callback_data=f"send_ovpn_{interface}_udp_{client_name}"
+                    text="UDP", callback_data=f"send_ovpn_{interface} udp {client_name}"
                 ),
             ],
             [
@@ -779,7 +769,7 @@ def create_confirmation_keyboard(client_name, vpn_type):
     )
 
 
-async def execute_script(option: str, client_name: str = None, days: str = None):
+async def execute_script(option: str, client_name: str = None):
     """Выполняет shell-скрипт для управления VPN-клиентами."""
     # Путь к скрипту
     script_path = os.path.join(os.path.dirname(__file__), '../scripts/client.sh')
@@ -797,8 +787,6 @@ async def execute_script(option: str, client_name: str = None, days: str = None)
     if option not in ["8", "7"] and client_name:
         clean_name = client_name.replace("antizapret-", "").replace("vpn-", "")
         command += f" {client_name}"
-        if days and option == "1":
-            command += f" {days}"
 
     try:
         # Указываем окружение, включая правильный $PATH
@@ -1320,11 +1308,9 @@ async def handle_interface_selection(callback: types.CallbackQuery, state: FSMCo
     if callback.data.startswith("openvpn_config_"):
         _, _, interface, _ = callback.data.split("_", 3)
         await state.update_data(interface=interface)
-        await callback.message.edit_text(
-            f"OpenVPN ({interface}): выберите протокол:",
-            reply_markup=create_openvpn_protocol_menu(interface, client_name),
-        )
-        await state.set_state(VPNSetup.choosing_protocol)
+        # Сразу отправляем UDP конфиг без выбора протокола
+        await send_ovpn_udp_config(callback, interface, client_name, state)
+        return
     else:
         _, _, interface, _ = callback.data.split("_", 3)
         await state.update_data(interface=interface)
@@ -1335,6 +1321,33 @@ async def handle_interface_selection(callback: types.CallbackQuery, state: FSMCo
         await state.set_state(VPNSetup.choosing_wg_type)
     await callback.answer()
 
+async def send_ovpn_udp_config(callback: types.CallbackQuery, interface: str, client_name: str, state: FSMContext):
+    """Автоматическая отправка UDP конфига OpenVPN"""
+    name_core = client_name.replace("antizapret-", "").replace("vpn-", "")
+    dir_path = f"/root/web/openvpn/clients/{interface}-udp/"
+    pattern = re.compile(rf"{interface}-{re.escape(name_core)}-\([^)]+\)-udp\.ovpn")
+
+    matched_file = None
+    if os.path.exists(dir_path):
+        for file in os.listdir(dir_path):
+            if pattern.fullmatch(file):
+                matched_file = os.path.join(dir_path, file)
+                break
+
+    if matched_file and await send_single_config(
+        callback.from_user.id, matched_file, os.path.basename(matched_file)
+    ):
+        await callback.message.delete()
+        if callback.from_user.id in ADMIN_ID:
+            await callback.message.answer(
+                "Главное меню: ", reply_markup=create_main_menu()
+            )
+        else:
+            await show_client_menu(callback.message, callback.from_user.id)
+        await state.clear()
+    else:
+        await callback.answer("❌ UDP файл не найден", show_alert=True)
+        await state.clear()
 
 @dp.callback_query(VPNSetup.choosing_protocol)
 async def handle_protocol_selection(callback: types.CallbackQuery, state: FSMContext):
@@ -1351,14 +1364,8 @@ async def handle_protocol_selection(callback: types.CallbackQuery, state: FSMCon
         _, _, interface, proto, _ = callback.data.split("_", 4)
         name_core = client_name.replace("antizapret-", "").replace("vpn-", "")
 
-        if proto == "default":
             dir_path = f"/root/antizapret/client/openvpn/{interface}/"
             pattern = re.compile(rf"{interface}-{re.escape(name_core)}-\([^)]+\)\.ovpn")
-        else:
-            dir_path = f"/root/antizapret/client/openvpn/{interface}-{proto}/"
-            pattern = re.compile(
-                rf"{interface}-{re.escape(name_core)}-\([^)]+\)-{proto}\.ovpn"
-            )
 
         matched_file = None
         if os.path.exists(dir_path):
@@ -1772,37 +1779,12 @@ async def handle_client_name(message: types.Message, state: FSMContext):
     data = await state.get_data()
     option = data["action"]
 
-    if option == "1":
-        await state.update_data(client_name=client_name)
-        await message.answer("Введите количество дней (1-3650):")
-        await state.set_state(VPNSetup.entering_days)
-    else:
-        result = await execute_script(option, client_name)
-        if result["returncode"] == 0:
-            await send_config(message.chat.id, client_name, option)
-            await message.answer("✅ Клиент создан!")
-            await message.answer("Главное меню:", reply_markup=create_main_menu())
-        else:
-            await message.answer(f"❌ Ошибка: {result['stderr']}")
-        await state.clear()
-
-
-@dp.message(VPNSetup.entering_days)
-async def handle_days(message: types.Message, state: FSMContext):
-    """Обрабатывает ввод количества дней для создания клиента в боте."""
-    update_admin_info(message.from_user)
-    days = message.text.strip()
-    if not days.isdigit() or not (1 <= int(days) <= 3650):
-        await message.answer("❌ Введите число от 1 до 3650")
-        return
-
-    data = await state.get_data()
-    client_name = data["client_name"]
-    result = await execute_script("1", client_name, days)
-
+    # Создаем клиента сразу, без запроса дней
+    result = await execute_script(option, client_name)
     if result["returncode"] == 0:
-        await send_config(message.chat.id, client_name, "1")
-        await message.answer("✅ Клиент создан!", reply_markup=create_main_menu())
+        await send_config(message.chat.id, client_name, option)
+        await message.answer("✅ Клиент создан!")
+        await message.answer("Главное меню:", reply_markup=create_main_menu())
     else:
         await message.answer(f"❌ Ошибка: {result['stderr']}")
     await state.clear()
@@ -1865,8 +1847,7 @@ async def send_config(chat_id: int, client_name: str, option: str):
             )
         else:  # OpenVPN
             directories = [
-                ("/root/antizapret/client/openvpn/antizapret", "OpenVPN (antizapret)"),
-                ("/root/antizapret/client/openvpn/vpn", "OpenVPN (vpn)"),
+                ("/root/web/openvpn/clients", "OpenVPN (vpn)"),
             ]
             pattern = re.compile(
                 rf"(antizapret|vpn)-{re.escape(client_name)}-\([^)]+\)\.ovpn"
@@ -1960,12 +1941,7 @@ async def get_server_stats():
         if main_interface:
             stats = psutil.net_io_counters(pernic=True)[main_interface]
 
-        file_paths = [
-            ("/etc/openvpn/server/logs/antizapret-udp-status.log", "UDP"),
-            ("/etc/openvpn/server/logs/antizapret-tcp-status.log", "TCP"),
-            ("/etc/openvpn/server/logs/vpn-udp-status.log", "VPN-UDP"),
-            ("/etc/openvpn/server/logs/vpn-tcp-status.log", "VPN-TCP"),
-        ]
+        file_paths = Config.LOG_FILES
 
         vpn_clients = count_online_clients(file_paths)
         clients_section = format_vpn_clients(vpn_clients)
