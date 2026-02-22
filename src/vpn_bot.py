@@ -1364,7 +1364,7 @@ async def handle_protocol_selection(callback: types.CallbackQuery, state: FSMCon
         _, _, interface, proto, _ = callback.data.split("_", 4)
         name_core = client_name.replace("antizapret-", "").replace("vpn-", "")
 
-            dir_path = f"/root/antizapret/client/openvpn/{interface}/"
+            dir_path = f"/root/web/openvpn/clients/{interface}/"
             pattern = re.compile(rf"{interface}-{re.escape(name_core)}-\([^)]+\)\.ovpn")
 
         matched_file = None
