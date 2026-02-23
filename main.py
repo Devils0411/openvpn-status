@@ -303,67 +303,76 @@ def build_available_admin_candidates(admin_info, admin_ids):
     return available
 
 
-def restart_telegram_bot():
+def restart_telegram_bot_async():
+    """
+    Перезапускает службу telegram-bot через supervisorctl.
+    Возвращает кортеж (успех: bool, ошибка: str или None).
+    """
     with BOT_RESTART_LOCK:
-        if not os.path.exists("/etc/systemd/system/telegram-bot.service"):
-            return False, "Служба telegram-bot не создана"
         try:
-            subprocess.run(
-                ["/bin/systemctl", "restart", BOT_SERVICE_NAME],
-                check=True,
+            result = subprocess.run(
+                ["supervisorctl", "restart", BOT_SERVICE_NAME],
+                check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            return True, None
-        except subprocess.CalledProcessError as exc:
-            try:
-                subprocess.run(
-                    ["/bin/systemctl", "reset-failed", f"{BOT_SERVICE_NAME}.service"],
-                    check=False,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-            except Exception:
-                pass
-            return False, exc.stderr.strip() or "неизвестная ошибка"
+            if result.returncode == 0:
+                return True, None
+            else:
+                error_msg = result.stderr.strip() or result.stdout.strip() or "неизвестная ошибка"
+                return False, error_msg
+        except Exception as exc:
+            return False, str(exc) or "неизвестная ошибка"
 
+def restart_telegram_bot():
+    """Запускает перезапуск в отдельном потоке"""
+    thread = threading.Thread(target=restart_telegram_bot_async)
+    thread.daemon = True
+    thread.start()
+    return True, None  # Возвращаем сразу успех
 
 def stop_telegram_bot():
+    """
+    Останавливает службу telegram-bot через supervisorctl.
+    Возвращает кортеж (успех: bool, ошибка: str или None).
+    """
     with BOT_RESTART_LOCK:
-        if not os.path.exists("/etc/systemd/system/telegram-bot.service"):
-            return False, "Служба telegram-bot не создана"
         try:
-            subprocess.run(
-                ["/bin/systemctl", "stop", BOT_SERVICE_NAME],
-                check=True,
+            result = subprocess.run(
+                ["supervisorctl", "stop", BOT_SERVICE_NAME],
+                check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            return True, None
-        except subprocess.CalledProcessError as exc:
-            return False, exc.stderr.strip() or "неизвестная ошибка"
+            if result.returncode == 0:
+                return True, None
+            else:
+                error_msg = result.stderr.strip() or result.stdout.strip() or "неизвестная ошибка"
+                return False, error_msg
+        except Exception as exc:
+            return False, str(exc) or "неизвестная ошибка"
 
 
 def get_telegram_bot_status():
+    """
+    Проверяет статус службы telegram-bot через supervisorctl.
+    Возвращает True, если служба активна (RUNNING), False во всех остальных случаях.
+    """
     try:
-        # Выполняем команду supervisorctl status для конкретной службы
         result = subprocess.run(
-            ["supervisorctl", "status", "telegram-bot"],
+            ["supervisorctl", "status", BOT_SERVICE_NAME],
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
-        
-        # Получаем вывод команды
-        status = result.stdout.strip()
-        return status == "RUNNING"
+        status = result.stdout.strip().upper()
+        if "RUNNING" in status or "STARTING" in status:
+            return True
     except Exception:
         return False
-
 
 # Функция для подлючения к базе данных SQLite
 def get_db_connection():

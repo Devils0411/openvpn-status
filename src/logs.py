@@ -405,10 +405,4 @@ def process_logs():
 
 
 if __name__ == "__main__":
-#    while True:
     process_logs()
-#        process_logs()
-#        print("Running logs.py...")
-#        # Пауза в 30 секунд
-#        time.sleep(30)
-    

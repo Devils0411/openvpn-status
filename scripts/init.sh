@@ -128,8 +128,8 @@ echo "База инициализирована"
 
 # Получаем список всех сетевых интерфейсов в системе
 for iface in $(ip -o link show | awk -F': ' '{print $2}' | cut -d'@' -f1); do
-    # Проверяем, соответствует ли имя интерфейса шаблону eth*, ens* или br*
-    if [[ "$iface" =~ ^(eth|ens|br) ]]; then
+    # Проверяем, соответствует ли имя интерфейса шаблону eth*, ens*
+    if [[ "$iface" =~ ^(eth|ens) ]]; then
     # Проверяем, активен ли интерфейс
         # Проверяем, есть ли интерфейс в vnStat
         if ! vnstat --dbiflist | grep -qw "$iface"; then
@@ -144,7 +144,7 @@ for iface in $(ip -o link show | awk -F': ' '{print $2}' | cut -d'@' -f1); do
             echo "Интерфейс $iface уже существует в vnStat."
         fi
     else
-        echo "Интерфейс $iface не соответствует паттерну (eth*, ens*, br*). Пропускаем..."
+        echo "Интерфейс $iface не соответствует паттерну (eth*, ens*). Пропускаем..."
     fi
 done
 
