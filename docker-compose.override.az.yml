@@ -13,7 +13,7 @@ services:
 #      - BOT_ON=Y
 #      - BOT_TOKEN=1
 #      - ADMIN_ID=1
-#      - HTTPS_ON=Y #Включение HTTPS
+#      - HTTPS_ON=Y #При интеграции в Antizapret - https должен быть отключен
 #      - DOMAIN_NAME=Test.ru #Указываем имя домена, если оно существует. (при условии включения HTTPS)
 
 # Необходимо пересоздать контейнер dashboard с нижеуказанными настройками
