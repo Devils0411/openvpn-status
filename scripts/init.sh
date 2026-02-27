@@ -301,9 +301,9 @@ EOF
         save_setup_var "SELF_SIGNED" "1"
     fi
     
-    echo -e "${GREEN}✅ HTTPS setup complete. Application available at: https://$domain:$https_port/${RESET}"
-    echo -e "${GREEN}Certificate Type: $CERT_TYPE${RESET}"
-    echo -e "${GREEN}Certificate Path: $CERT_PATH${RESET}"
+    echo -e "${GREEN}✅ Настройка HTTPS завершена. Приложение доступно по адресу: https://$domain:$https_port/${RESET}"
+    echo -e "${GREEN}Тип сертификата: $CERT_TYPE${RESET}"
+    echo -e "${GREEN}Путь к сертификату: $CERT_PATH${RESET}"
     
     if [[ "$use_self_signed" == "true" ]]; then
         echo -e "${YELLOW}⚠️  Заметка: Самоподписанный сертификат — примите предупреждение браузера.${RESET}"
