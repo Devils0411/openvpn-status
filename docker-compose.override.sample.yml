@@ -1,6 +1,8 @@
 services:
   openvpn-status:
     network_mode: host #Подключение к сети хотя для мониторинга всего сетевого трафика
+    networks:
+      - antizapret_default
     ports:
       - "2000:2000" # Хост:контейнер #При условии отсутствия network_mode
     extends:
@@ -15,3 +17,8 @@ services:
       - ADMIN_ID=1
       - HTTPS_ON=Y #Включение HTTPS
       - DOMAIN_NAME=Test.ru #Указываем имя домена, если оно существует. (при условии включения HTTPS)
+
+networks:
+  antizapret_default:
+    external: true
+    name: antizapret_default
