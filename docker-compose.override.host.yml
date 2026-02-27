@@ -1,7 +1,6 @@
 services:
   openvpn-status:
-    ports:
-      - "2000:2000" # Хост:контейнер #При условии отсутствия network_mode
+    network_mode: host #Подключение к сети хотя для мониторинга всего сетевого трафика
     extends:
       file: docker-compose.yml
       service: openvpn-status
