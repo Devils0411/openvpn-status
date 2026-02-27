@@ -22,7 +22,7 @@ services:
 #      file: services/dashboard/docker-compose.yml
 #      service: dashboard
 #    environment:
-#      - DASHBOARD_SERVICE_7=OpenVPN Status:6443:openvpn-status.antizapret:2000
+#      - DASHBOARD_SERVICE_6=OpenVPN Status:6443:openvpn-status.antizapret:2000
 
 networks:
   antizapret_default:
