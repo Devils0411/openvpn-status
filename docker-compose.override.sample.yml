@@ -1,0 +1,17 @@
+services:
+  openvpn-status:
+    network_mode: host #Подключение к сети хотя для мониторинга всего сетевого трафика
+    ports:
+      - "2000:2000" # Хост:контейнер #При условии отсутствия network_mode
+    extends:
+      file: docker-compose.yml
+      service: openvpn-status
+    environment:
+      - PORT=2000
+      - ADMIN_USERNAME=admin!
+      - ADMIN_PASSWORD=admin!
+      - BOT_ON=Y
+      - BOT_TOKEN=1
+      - ADMIN_ID=1
+      - HTTPS_ON=Y #Включение HTTPS
+      - DOMAIN_NAME=Test.ru #Указываем имя домена, если оно существует. (при условии включения HTTPS)

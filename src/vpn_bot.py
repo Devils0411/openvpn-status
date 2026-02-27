@@ -270,6 +270,17 @@ def set_load_thresholds(cpu_threshold: int = None, memory_threshold: int = None)
     data["load_thresholds"] = thresholds
     save_settings(data)
 
+def format_days(days: int) -> str:
+    """Форматирует количество дней с правильным окончанием на русском языке."""
+    days = int(days)
+    
+    if days % 10 == 1 and days % 100 != 11:
+        return f"{days} день"
+    elif 2 <= days % 10 <= 4 and (days % 100 < 10 or days % 100 >= 20):
+        return f"{days} дня"
+    else:
+        return f"{days} дней"
+
 
 # Проверяем, что переменные окружения корректны
 if not BOT_TOKEN or BOT_TOKEN == "<Enter API Token>":
@@ -287,6 +298,7 @@ class VPNSetup(StatesGroup):
 
     choosing_option = State()  # Состояние выбора опции (добавление/удаление клиента).
     entering_client_name = State()  # Состояние ввода имени клиента.
+    entering_days = State()  # Состояние ввода количества дней для сертификата
     deleting_client = State()  # Состояние подтверждения удаления клиента.
     list_for_delete = State()  # Состояние выбора клиента из списка для удаления.
     choosing_config_type = State()  # Состояние для выбора конфигурации
@@ -769,7 +781,7 @@ def create_confirmation_keyboard(client_name, vpn_type):
     )
 
 
-async def execute_script(option: str, client_name: str = None):
+async def execute_script(option: str, client_name: str = None, days: str = None):
     """Выполняет shell-скрипт для управления VPN-клиентами."""
     # Путь к скрипту
     script_path = os.path.join(os.path.dirname(__file__), '../scripts/client.sh')
@@ -787,6 +799,8 @@ async def execute_script(option: str, client_name: str = None):
     if option not in ["8", "7"] and client_name:
         clean_name = client_name.replace("antizapret-", "").replace("vpn-", "")
         command += f" {client_name}"
+        if option == "1" and days:
+            command += f" {days}"
 
     try:
         # Указываем окружение, включая правильный $PATH
@@ -1596,6 +1610,45 @@ async def cleanup_openvpn_files(client_name: str):
 
     return deleted_files
 
+@dp.callback_query(VPNSetup.entering_days, lambda c: c.data == "skip_expire")
+async def handle_skip_expire(callback: types.CallbackQuery, state: FSMContext):
+    """Обрабатывает пропуск ввода срока действия."""
+    if callback.from_user.id not in ADMIN_ID:
+        await callback.answer("Доступ запрещен!", show_alert=True)
+        return
+
+    current_state = await state.get_state()
+    if current_state != VPNSetup.entering_days:
+        await callback.answer("❌ Сессия истекла, начните заново", show_alert=True)
+        await state.clear()
+        return
+    
+    data = await state.get_data()
+    client_name = data["client_name"]
+    option = data.get("action")
+    
+    if not client_name or option != "1":
+        await callback.answer("❌ Ошибка: данные клиента не найдены", show_alert=True)
+        await state.clear()
+        return
+    
+    await callback.message.delete()
+    
+    # Создаем клиента со сроком по умолчанию
+    result = await execute_script("1", client_name, "1825")
+    
+    if result["returncode"] == 0:
+        await send_config(callback.from_user.id, client_name, option)
+        await callback.message.answer(
+            f"✅ Клиент создан!\n📅 Срок действия: {format_days(1825)} (по умолчанию)"
+        )
+        await callback.message.answer("Главное меню:", reply_markup=create_main_menu())
+    else:
+        await callback.message.answer(f"❌ Ошибка: {result['stderr']}")
+    
+    await state.clear()
+    await callback.answer()
+
 
 @dp.callback_query(lambda c: c.from_user.id in ADMIN_ID)
 async def handle_callback_query(callback: types.CallbackQuery, state: FSMContext):
@@ -1783,23 +1836,64 @@ async def handle_client_name(message: types.Message, state: FSMContext):
     """Обрабатывает ввод имени клиента в боте."""
     update_admin_info(message.from_user)
     client_name = message.text.strip()
-    if not re.match(r"^[a-zA-Z0-9_-]{1,32}$", client_name):
+    if not re.match(r"^[a-zA-Z0-9_.-]{1,32}$", client_name):
         await message.answer("❌ Некорректное имя! Используйте буквы, цифры, _ и -")
         return
 
     data = await state.get_data()
     option = data["action"]
+    await state.update_data(client_name=client_name)
 
-    # Создаем клиента сразу, без запроса дней
-    result = await execute_script(option, client_name)
+
+    if option == "1":  # OpenVPN - спрашиваем срок действия
+        await message.answer(
+            "Введите срок действия сертификата в днях (по умолчанию 1825 дней = 5 лет):\n"
+            "Например: 365 (1 год), 730 (2 года), 1825 (5 лет)",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="⏭️ Пропустить (1825 дней)", callback_data="skip_expire")]
+                ]
+            )
+        )
+        await state.set_state(VPNSetup.entering_days)
+    else:  # WireGuard - создаем сразу
+        result = await execute_script(option, client_name)
+        if result["returncode"] == 0:
+            await send_config(message.chat.id, client_name, option)
+            await message.answer("✅ Клиент создан!")
+            await message.answer("Главное меню:", reply_markup=create_main_menu())
+        else:
+            await message.answer(f"❌ Ошибка: {result['stderr']}")
+        await state.clear()
+
+
+@dp.message(VPNSetup.entering_days)
+async def handle_days(message: types.Message, state: FSMContext):
+    """Обрабатывает ввод количества дней для создания клиента в боте."""
+    update_admin_info(message.from_user)
+    days = message.text.strip()
+    if days.isdigit() and 1 <= int(days) <= 1825:
+        days = message.text.strip()
+    else:
+        await message.answer(
+            "❌ Некорректное значение! Введите число от 1 до 1825 дней"
+        )
+        return
+
+    data = await state.get_data()
+    client_name = data["client_name"]
+    result = await execute_script("1", client_name, days)
+
     if result["returncode"] == 0:
-        await send_config(message.chat.id, client_name, option)
-        await message.answer("✅ Клиент создан!")
+        await send_config(message.chat.id, client_name, "1")
+        await message.answer(
+            f"✅ Клиент создан!\n"
+            f"📅 Срок действия: {format_days(int(days))}"
+        )
         await message.answer("Главное меню:", reply_markup=create_main_menu())
     else:
         await message.answer(f"❌ Ошибка: {result['stderr']}")
     await state.clear()
-
 
 @dp.message(VPNSetup.deleting_client)
 async def handle_delete_client(message: types.Message, state: FSMContext):

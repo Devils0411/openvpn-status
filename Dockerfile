@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     procps \
     easy-rsa \
     iproute2 \
+    nginx \
+    certbot \
+    python3-certbot-nginx \
     supervisor && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && chmod 755 /usr/share/easy-rsa/*
 

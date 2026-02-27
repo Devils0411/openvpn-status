@@ -1176,7 +1176,7 @@ def get_network_load():
 
     network_data = {}
     for interface in net_io_start:
-        if interface.startswith(("lo", "docker", "veth")):
+        if interface.startswith(("lo", "docker", "veth", "br-")):
             continue
 
         sent_start, recv_start = (
@@ -1318,8 +1318,8 @@ def update_system_info():
                 cpu_history.pop(0)  # удаляем старые записи
 
             interface = get_default_interface()
-            # Проверяем, чтобы интерфейс не начинался с lo, docker, veth
-            if interface and not interface.startswith(("lo", "docker", "veth")):
+            # Проверяем, чтобы интерфейс не начинался с lo, docker, veth, br-
+            if interface and not interface.startswith(("lo", "docker", "veth", "br-")):
                 network_stats = get_network_stats(interface) if interface else None
             else:
                 network_stats = None

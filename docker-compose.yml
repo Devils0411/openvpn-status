@@ -5,18 +5,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    network_mode: host
-    ports:
-      - "1234:1234"
     volumes:
-      - /root/antizapret/config/openvpn/log:/etc/openvpn/server/logs:ro # Монтирование папки log-файла OpenVPN
-      - /root/openvpn-status/src/data:/root/web/src/data # Монтирование папки с базой данных
-      - /root/antizapret/config/openvpn:/root/web/openvpn #Монтирование папки
+      - /root/antizapret/config/openvpn/log:/etc/openvpn/server/logs:ro # Монтирование папки log-файлов OpenVPN
+      - /root/openvpn-status/src/data:/root/web/src/data # Монтирование папки с базами данных
+      - /root/antizapret/config/openvpn:/root/web/openvpn #Монтирование папки OpenVPN
     environment:
-      - PORT=1234
+      - PORT=1235
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD=admin
-      - INSTALL_BOT=N # Установка телеграмм-бота.
-      - BOT_TOKEN=1
-      - ADMIN_ID=1
     restart: unless-stopped
