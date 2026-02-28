@@ -53,52 +53,72 @@ render() {
 	done < "$1"
 }
 
-addOpenVPN(){
+addOpenVPN() {
+    # Check if 2FA was specified. If not - set to none.
+    if [ -z "$TFA_NAME" ]; then
+        TFA_NAME="none"
+    fi
 
-# Check if 2FA was specified. If not - set to none.
-if [ -z "$TFA_NAME" ]; then
-    TFA_NAME="none"
-fi
+    # Проверяем, передан ли срок действия в третьем аргументе
+    if [ -n "$CLIENT_CERT_EXPIRE" ] && [[ "$CLIENT_CERT_EXPIRE" =~ ^[0-9]+$ ]]; then
+        export EASYRSA_CERT_EXPIRE="$CLIENT_CERT_EXPIRE"
+        echo "Установлен срок действия сертификата: $EASYRSA_CERT_EXPIRE дней"
+    else
+        export EASYRSA_CERT_EXPIRE=1825
+        echo "Используется срок действия по умолчанию: $EASYRSA_CERT_EXPIRE дней"
+    fi
 
-# Проверяем, передан ли срок действия в третьем аргументе
-if [ -n "$CLIENT_CERT_EXPIRE" ] && [[ "$CLIENT_CERT_EXPIRE" =~ ^[0-9]+$ ]]; then
-    export EASYRSA_CERT_EXPIRE="$CLIENT_CERT_EXPIRE"
-    echo "Установлен срок действия сертификата: $EASYRSA_CERT_EXPIRE дней"
-else
-    export EASYRSA_CERT_EXPIRE=1825
-    echo "Используется срок действия по умолчанию: $EASYRSA_CERT_EXPIRE дней"
-fi
+# Проверяем существование клиента (по файлу или по записи в index.txt)
+    CLIENT_EXISTS=false
+    if [[ -f "$OVPN_FILE_PATH" ]] || grep -q "/CN=${CLIENT_NAME}/" "$INDEX" 2>/dev/null; then
+        CLIENT_EXISTS=true
+    fi
 
-if [[ ! -f $DIR_OPENVPN/clients/$CLIENT_NAME.ovpn ]]; then
-
-export EASYRSA_BATCH=1
-#echo 'Патчим easy-rsa.3.1.1 openssl-easyrsa.cnf...' 
-sed -i '/serialNumber_default/d' "$EASY_RSA/openssl-easyrsa.cnf"
-
-echo 'Генерируем новый сертификат для клиента'
-echo -e "Используем следующие параметры: \nEASYRSA_CERT_EXPIRE: $EASYRSA_CERT_EXPIRE\nEASYRSA_REQ_EMAIL: $EASYRSA_REQ_EMAIL" #\nEASYRSA_REQ_COUNTRY: $EASYRSA_REQ_COUNTRY\nEASYRSA_REQ_PROVINCE: $EASYRSA_REQ_PROVINCE\nEASYRSA_REQ_CITY: 	$EASYRSA_REQ_CITY\nEASYRSA_REQ_ORG: $EASYRSA_REQ_ORG\nEASYRSA_REQ_OU: $EASYRSA_REQ_OU"
-echo -e "EasyRSA VARS will be used:\n$(cat $DIR_PKI/vars)"
-
-$EASY_RSA/easyrsa --batch --req-cn="$CLIENT_NAME" --days="$EASYRSA_CERT_EXPIRE" --req-email="$EASYRSA_REQ_EMAIL" gen-req "$CLIENT_NAME" nopass 
-#subject="/C=$EASYRSA_REQ_COUNTRY/ST=$EASYRSA_REQ_PROVINCE/L=\"$EASYRSA_REQ_CITY\"/O=\"$EASYRSA_REQ_ORG\"/OU=\"$EASYRSA_REQ_OU\""
+    if [[ "$CLIENT_EXISTS" == true ]]; then
+        echo "Клиент '$CLIENT_NAME' уже существует. Выполняется перевыпуск сертификата..."
         
-$EASY_RSA/easyrsa sign-req client "$CLIENT_NAME"
-# Fix for /name in index.txt
-echo "Правим БД..."
-sed -i'.bak' "$ s/$/\/name=${CLIENT_NAME}\/LocalIP=${CERT_IP}\/2FAName=${TFA_NAME}/" "$INDEX"
-echo "БД скорректирована:"
-tail -1 $INDEX
-# Certificate properties
-CA="$(cat $DIR_PKI/ca.crt )"
-CERT="$(cat $DIR_PKI/issued/${CLIENT_NAME}.crt)"
-KEY="$(cat $DIR_PKI/private/${CLIENT_NAME}.key)"
-TLS_CRYPT="$(cat $DIR_PKI/ta.key)"
+        # 1. Отзываем старый сертификат
+        echo "Отзываем старый сертификат..."
+        $EASY_RSA/easyrsa --batch revoke "$CLIENT_NAME" 2>/dev/null || true
+        
+        # 2. Генерируем CRL, чтобы отзыв вступил в силу
+        $EASY_RSA/easyrsa gen-crl 2>/dev/null
+        
+        # 3. Удаляем осиротевшие файлы старого сертификата
+        cleanupOrphanedCerts "$CLIENT_NAME"
+        
+        # 4. Удаляем старую запись из index.txt (чтобы избежать дублей при новой генерации)
+        sed -i'.bak' "/\/CN=${CLIENT_NAME}\//d" "$INDEX"
+        
+        echo "Старый сертификат удален. Генерируем новый..."
+    else
+        echo "Генерируем новый сертификат для клиента..."
+    fi
 
-echo 'Корректируем права доступа к pki/issued...'
-chmod +r $DIR_PKI/issued
+    # Патч easy-rsa (если требуется)
+    sed -i '/serialNumber_default/d' "$EASY_RSA/openssl-easyrsa.cnf" 2>/dev/null || true
 
-echo 'Генерация .ovpn файла...'
-echo "$(cat $DIR_OPENVPN/config/client.conf)
+    export EASYRSA_BATCH=1
+    $EASY_RSA/easyrsa --batch --req-cn="$CLIENT_NAME" --days="$EASYRSA_CERT_EXPIRE" --req-email="$EASYRSA_REQ_EMAIL" gen-req "$CLIENT_NAME" nopass
+    $EASY_RSA/easyrsa sign-req client "$CLIENT_NAME"
+
+    # Fix for /name in index.txt
+    echo "Правим БД..."
+    sed -i'.bak' "$ s/$/\/name=${CLIENT_NAME}\/LocalIP=${CERT_IP}\/2FAName=${TFA_NAME}/" "$INDEX"
+    echo "БД скорректирована:"
+    tail -1 $INDEX
+
+    # Certificate properties
+    CA="$(cat $DIR_PKI/ca.crt)"
+    CERT="$(cat $DIR_PKI/issued/${CLIENT_NAME}.crt)"
+    KEY="$(cat $DIR_PKI/private/${CLIENT_NAME}.key)"
+    TLS_CRYPT="$(cat $DIR_PKI/ta.key)"
+
+    echo 'Корректируем права доступа к pki/issued...'
+    chmod +r $DIR_PKI/issued
+
+    echo 'Генерация .ovpn файла...'
+    echo "$(cat $DIR_OPENVPN/config/client.conf)
 <ca>
 $CA
 </ca>
@@ -113,22 +133,28 @@ $TLS_CRYPT
 </tls-crypt>
 " > "$DIR_OPENVPN/clients/${CLIENT_NAME}.ovpn"
 
-echo -e "Клиентский сертификат успешно сгенерирован!\nПроверь $DIR_OPENVPN/clients/${CLIENT_NAME}.ovpn"
+    echo -e "Клиентский сертификат успешно сгенерирован/обновлен!"
+}
 
-else
-
-CERT_SERIAL=$(grep -E "/name=$CLIENT_NAME/" "$INDEX" | awk '{print $3}')
-export EASYRSA_BATCH=1
-
-# Обновление сертификата.
-echo "Обновление сертификата: $CLIENT_NAME с $TFA_NAME с локальным IP: $CERT_IP и серийным номером: $CERT_SERIAL"
-$EASY_RSA/easyrsa renew "$CLIENT_NAME"
- 
-# Скорректировать новое /name в index.txt (adding name and ip to the last line)
-sed -i'.bak' "$ s/$/\/name=${CLIENT_NAME}\/LocalIP=${CERT_IP}\/2FAName=${TFA_NAME}/" $INDEX
-echo 'Все готово!'
-
-fi
+# Функция очистки осиротевших файлов сертификата
+cleanupOrphanedCerts() {
+    local name="$1"
+    echo "Очистка старых файлов для: $name"
+    
+    # Удаляем файлы по имени в основных директориях
+    find "$DIR_PKI" -type f \( -name "${name}.crt" -o -name "${name}.key" -o -name "${name}.req" \) -delete 2>/dev/null
+    
+    # Директория renewed
+    rm -f "$DIR_PKI/renewed/issued/${name}.crt" 2>/dev/null
+    rm -f "$DIR_PKI/renewed/private/${name}.key" 2>/dev/null
+    rm -f "$DIR_PKI/renewed/reqs/${name}.req" 2>/dev/null
+    
+    # Директория inline
+    rm -f "$DIR_PKI/inline/${name}.inline" 2>/dev/null
+    
+    # Директория revoked (физические файлы)
+    rm -f "$DIR_PKI/revoked/issued/${name}.crt" 2>/dev/null
+    rm -f "$DIR_PKI/revoked/private/${name}.key" 2>/dev/null
 }
 
 deleteOpenVPN(){
