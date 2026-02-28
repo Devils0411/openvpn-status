@@ -226,6 +226,7 @@ deleteOpenVPN(){
 }
 
 listOpenVPN(){
+<<<<<<< HEAD
 	[[ -n "$CLIENT_NAME" ]] && return
 	echo
 	echo 'OpenVPN client names:'
@@ -234,13 +235,79 @@ listOpenVPN(){
 
 
 if ! [[ "$OPTION" =~ ^[1-3]$ ]]; then
+=======
+    [[ -n "$CLIENT_NAME" ]] && return
+    echo
+    echo 'OpenVPN client names:'
+    
+    # Проходим по всем файлам сертификатов
+    for cert_file in "$DIR_PKI/issued"/*.crt; do
+        [ -e "$cert_file" ] || continue
+        
+        # Извлекаем имя клиента из имени файла
+        client_name=$(basename "$cert_file" .crt)
+        
+        # Пропускаем служебные сертификаты (CA, сервер и т.д.)
+        [[ "$client_name" == "ca" ]] && continue
+        [[ "$client_name" == "server" ]] && continue
+        [[ "$client_name" == "antizapret-server" ]] && continue
+        
+        # Проверяем, есть ли соответствующий .ovpn файл (значит клиент активен)
+        if [[ -f "$DIR_OPENVPN/clients/${client_name}.ovpn" ]]; then
+            # Получаем дату окончания сертификата
+            expire_date=$(openssl x509 -enddate -noout -in "$cert_file" 2>/dev/null | cut -d= -f2)
+            
+            # Конвертируем в формат DD-MM-YYYY для удобства парсинга в Python
+            if [ -n "$expire_date" ]; then
+                expire_formatted=$(date -d "$expire_date" +"%d-%m-%Y" 2>/dev/null || echo "unknown")
+                # Вывод в формате: Имя_клиента|Дата_окончания
+                echo "${client_name}|${expire_formatted}"
+            else
+                echo "${client_name}|unknown"
+            fi
+        fi
+    done | sort
+}
+
+listWireGuard(){
+    [[ -n "$CLIENT_NAME" ]] && return
+    echo
+    echo 'WireGuard/AmneziaWG client names:'
+    
+    # Путь к конфигам WireGuard (проверьте актуальность пути на вашем сервере)
+    WG_DIR="/etc/wireguard"
+    
+    # Ищем файлы конфига клиентов (обычно wg0.conf или в подпапках)
+    # В данном примере ищем файлы .conf, исключая основной серверный конфиг
+    find "$WG_DIR" -name "*.conf" -type f 2>/dev/null | while read -r conf_file; do
+        filename=$(basename "$conf_file")
+        # Исключаем основные конфиги сервера
+        [[ "$filename" == "wg0.conf" ]] && continue
+        [[ "$filename" == "server.conf" ]] && continue
+        
+        # Извлекаем имя клиента из имени файла (например, client-name.conf -> client-name)
+        client_name="${filename%.conf}"
+        echo "$client_name"
+    done | sort
+}
+
+
+if ! [[ "$OPTION" =~ ^[1-6]$ ]]; then
+>>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 	echo
 	echo 'Please choose option:'
 	echo '    1) OpenVPN - Добавление/Обновление сертификата клиента'
 	echo '    2) OpenVPN - Удаление клиента'
+<<<<<<< HEAD
 	echo '    3) OpenVPN - список склиентов'
 	until [[ "$OPTION" =~ ^[1-3]$ ]]; do
 		read -rp 'Option choice [1-3]: ' -e OPTION
+=======
+	echo '    3) OpenVPN - список клиентов'
+	echo '    6) WireGuard - список клиентов'
+	until [[ "$OPTION" =~ ^[1-6]$ ]]; do
+		read -rp 'Option choice [1-6]: ' -e OPTION
+>>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 	done
 fi
 
@@ -260,5 +327,12 @@ case "$OPTION" in
 		echo 'OpenVPN - List clients'
 		listOpenVPN
 		;;
+<<<<<<< HEAD
+=======
+	6)
+		echo 'WireGuard - List clients'
+		listWireGuard
+		;;
+>>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 esac
 exit 0
