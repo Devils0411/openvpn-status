@@ -382,17 +382,6 @@ def set_load_thresholds(cpu_threshold: int = None, memory_threshold: int = None)
     except Exception as e:
         logger.error(f"Ошибка установки порогов нагрузки: {e}")
 
-def format_days(days: int) -> str:
-    """Форматирует количество дней с правильным окончанием на русском языке."""
-    days = int(days)
-    
-    if days % 10 == 1 and days % 100 != 11:
-        return f"{days} день"
-    elif 2 <= days % 10 <= 4 and (days % 100 < 10 or days % 100 >= 20):
-        return f"{days} дня"
-    else:
-        return f"{days} дней"
-
 
 def format_days(days: int) -> str:
     """Форматирует количество дней с правильным окончанием на русском языке."""
@@ -421,21 +410,6 @@ if not ADMIN_ID or ADMIN_ID == "":
 # ============================================================================
 class VPNSetup(StatesGroup):
     """Класс состояний для управления процессами настройки VPN через бота."""
-<<<<<<< HEAD
-
-    choosing_option = State()  # Состояние выбора опции (добавление/удаление клиента).
-    entering_client_name = State()  # Состояние ввода имени клиента.
-    entering_days = State()  # Состояние ввода количества дней для сертификата
-    deleting_client = State()  # Состояние подтверждения удаления клиента.
-    list_for_delete = State()  # Состояние выбора клиента из списка для удаления.
-    choosing_config_type = State()  # Состояние для выбора конфигурации
-    choosing_protocol = State()  # Для выбора протокола OpenVPN
-    choosing_wg_type = State()  # Для выбора типа WireGuard
-    confirming_rename = State()  # Для подтверждения переименования файлов WireGuard
-    entering_client_mapping = State()  # Состояние для привязки клиента к Telegram ID
-    entering_cpu_threshold = State()  # Ввод порога CPU
-    entering_memory_threshold = State()  # Ввод порога RAM
-=======
     choosing_option = State()
     entering_client_name = State()
     entering_days = State()
@@ -448,7 +422,6 @@ class VPNSetup(StatesGroup):
     entering_client_mapping = State()
     entering_cpu_threshold = State()
     entering_memory_threshold = State()
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 
 
 # ============================================================================
@@ -537,13 +510,6 @@ def create_main_menu():
             [
                 InlineKeyboardButton(text="OpenVPN", callback_data="openvpn_menu"),
 #                InlineKeyboardButton(text="WireGuard", callback_data="wireguard_menu"),
-<<<<<<< HEAD
-            ],
-            [
-#                InlineKeyboardButton(text="🔄 Пересоздать файлы", callback_data="7"),
-#                InlineKeyboardButton(text="📦 Создать бэкап", callback_data="8"),
-=======
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
             ],
 #            [
 #                InlineKeyboardButton(text="🔄 Пересоздать файлы", callback_data="7"),
@@ -950,12 +916,9 @@ def create_confirmation_keyboard(client_name, vpn_type):
     )
 
 
-<<<<<<< HEAD
-=======
 # ============================================================================
 # ВЫПОЛНЕНИЕ СКРИПТОВ
 # ============================================================================
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 async def execute_script(option: str, client_name: str = None, days: str = None):
     """Выполняет shell-скрипт для управления VPN-клиентами."""
     script_path = os.path.join(os.path.dirname(__file__), '../scripts/client.sh')
@@ -1175,17 +1138,11 @@ async def handle_clientmap_actions(callback: types.CallbackQuery, state: FSMCont
         return
     
     data = callback.data
-<<<<<<< HEAD
-    if data in ["wireguard_menu", "7", "8"]:
-        await callback.answer("⛔ Эта функция отключена", show_alert=True)
-        return
-=======
     
     if data in ["wireguard_menu", "7", "8"]:
         await callback.answer("⛔ Эта функция отключена", show_alert=True)
         return
     
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
     if data == "clientmap_add":
         await callback.message.edit_text(
             "Отправьте привязку в формате:\n"
@@ -1433,10 +1390,6 @@ async def handle_client_selection(callback: types.CallbackQuery, state: FSMConte
     )
     
     if vpn_type == "openvpn":
-<<<<<<< HEAD
-        # Сразу отправляем конфиг без выбора типа (по умолчанию интерфейс "vpn")
-=======
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
         await callback.answer("⏳ Генерация конфигурации...")
         await send_ovpn_udp_config(callback, "vpn", client_name, state)
         return
@@ -1515,32 +1468,16 @@ async def handle_interface_selection(callback: types.CallbackQuery, state: FSMCo
 
 
 async def send_ovpn_udp_config(callback: types.CallbackQuery, interface: str, client_name: str, state: FSMContext):
-    """Автоматическая отправка UDP конфига OpenVPN (формат: client_name.ovpn)"""
-    # Очищаем имя клиента от префиксов
+    """Автоматическая отправка UDP конфига OpenVPN"""
     name_core = client_name.replace("antizapret-", "").replace("vpn-", "")
-<<<<<<< HEAD
-    
-    # Путь к директории с конфигами
-    dir_path = f"/root/web/openvpn/clients/"
-    
-    # === ИЗМЕНЕНИЕ: Простой формат имени файла ===
-    target_file = f"{name_core}.ovpn"
-    matched_file = None
-    
-=======
     dir_path = "/root/web/openvpn/clients/"
     target_file = f"{name_core}.ovpn"
     matched_file = None
 
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
     if os.path.exists(dir_path):
         file_path = os.path.join(dir_path, target_file)
         if os.path.exists(file_path):
             matched_file = file_path
-<<<<<<< HEAD
-    # =============================================
-=======
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 
     if matched_file and await send_single_config(
         callback.from_user.id, matched_file, os.path.basename(matched_file)
@@ -1568,27 +1505,17 @@ async def handle_protocol_selection(callback: types.CallbackQuery, state: FSMCon
             await callback.answer("Доступ запрещен!", show_alert=True)
             await state.clear()
             return
-    
+
     if callback.data.startswith("send_ovpn_"):
         _, _, interface, proto, _ = callback.data.split("_", 4)
         name_core = client_name.replace("antizapret-", "").replace("vpn-", "")
 
         if proto == "default":
-<<<<<<< HEAD
-            dir_path = f"/root/antizapret/client/openvpn/"
-            pattern = re.compile(rf"{interface}-{re.escape(name_core)}-\([^)]+\)\.ovpn")
-        else:
-            dir_path = f"/root/antizapret/client/openvpn/"
-            pattern = re.compile(
-                rf"{interface}-{re.escape(name_core)}-\([^)]+\)-{proto}\.ovpn"
-            )
-=======
             dir_path = "/root/antizapret/client/openvpn/"
             pattern = re.compile(rf"{interface}-{re.escape(name_core)}-\([^)]+\)\.ovpn")
         else:
             dir_path = "/root/antizapret/client/openvpn/"
             pattern = re.compile(rf"{interface}-{re.escape(name_core)}-\([^)]+\)-{proto}\.ovpn")
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 
         matched_file = None
         if os.path.exists(dir_path):
@@ -1602,13 +1529,7 @@ async def handle_protocol_selection(callback: types.CallbackQuery, state: FSMCon
         ):
             await callback.message.delete()
             if callback.from_user.id in ADMIN_ID:
-<<<<<<< HEAD
-                await callback.message.answer(
-                    "Главное меню: ", reply_markup=create_main_menu()
-                )
-=======
                 await callback.message.answer("Главное меню:", reply_markup=create_main_menu())
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
             else:
                 await show_client_menu(callback.message, callback.from_user.id)
             await state.clear()
@@ -1618,8 +1539,6 @@ async def handle_protocol_selection(callback: types.CallbackQuery, state: FSMCon
 
     elif callback.data.startswith("back_to_interface_"):
         await handle_back_to_interface(callback, state)
-    
-    await callback.answer()
 
     await callback.answer()
 
@@ -1775,16 +1694,7 @@ async def handle_config_cancel(callback: types.CallbackQuery, state: FSMContext)
 async def cleanup_openvpn_files(client_name: str):
     """Дополнительная очистка файлов OpenVPN после основного скрипта"""
     clean_name = client_name.replace("antizapret-", "").replace("vpn-", "")
-<<<<<<< HEAD
-
-    # Директории для проверки
-    dirs_to_check = [
-        "/root/web/openvpn/clients/",
-    ]
-
-=======
     dirs_to_check = ["/root/web/openvpn/clients/"]
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
     deleted_files = []
 
     for dir_path in dirs_to_check:
@@ -1802,45 +1712,6 @@ async def cleanup_openvpn_files(client_name: str):
                     logger.error(f"Ошибка удаления {file_path}: {e}")
 
     return deleted_files
-
-@dp.callback_query(VPNSetup.entering_days, lambda c: c.data == "skip_expire")
-async def handle_skip_expire(callback: types.CallbackQuery, state: FSMContext):
-    """Обрабатывает пропуск ввода срока действия."""
-    if callback.from_user.id not in ADMIN_ID:
-        await callback.answer("Доступ запрещен!", show_alert=True)
-        return
-
-    current_state = await state.get_state()
-    if current_state != VPNSetup.entering_days:
-        await callback.answer("❌ Сессия истекла, начните заново", show_alert=True)
-        await state.clear()
-        return
-    
-    data = await state.get_data()
-    client_name = data["client_name"]
-    option = data.get("action")
-    
-    if not client_name or option != "1":
-        await callback.answer("❌ Ошибка: данные клиента не найдены", show_alert=True)
-        await state.clear()
-        return
-    
-    await callback.message.delete()
-    
-    # Создаем клиента со сроком по умолчанию
-    result = await execute_script("1", client_name, "1825")
-    
-    if result["returncode"] == 0:
-        await send_config(callback.from_user.id, client_name, option)
-        await callback.message.answer(
-            f"✅ Клиент создан!\n📅 Срок действия: {format_days(1825)} (по умолчанию)"
-        )
-        await callback.message.answer("Главное меню:", reply_markup=create_main_menu())
-    else:
-        await callback.message.answer(f"❌ Ошибка: {result['stderr']}")
-    
-    await state.clear()
-    await callback.answer()
 
 
 @dp.callback_query(VPNSetup.entering_days, lambda c: c.data == "skip_expire")
@@ -2025,10 +1896,7 @@ async def handle_client_name(message: types.Message, state: FSMContext):
     """Обрабатывает ввод имени клиента в боте."""
     update_admin_info(message.from_user)
     client_name = message.text.strip()
-<<<<<<< HEAD
-=======
     
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
     if not re.match(r"^[a-zA-Z0-9_.-]{1,32}$", client_name):
         await message.answer("❌ Некорректное имя! Используйте буквы, цифры, _ и -")
         return
@@ -2037,12 +1905,7 @@ async def handle_client_name(message: types.Message, state: FSMContext):
     option = data["action"]
     await state.update_data(client_name=client_name)
 
-<<<<<<< HEAD
-
-    if option == "1":  # OpenVPN - спрашиваем срок действия
-=======
     if option == "1":
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
         await message.answer(
             "Введите срок действия сертификата в днях (по умолчанию 1825 дней = 5 лет):\n"
             "Например: 365 (1 год), 730 (2 года), 1825 (5 лет)",
@@ -2053,15 +1916,6 @@ async def handle_client_name(message: types.Message, state: FSMContext):
             )
         )
         await state.set_state(VPNSetup.entering_days)
-<<<<<<< HEAD
-    else:  # WireGuard - создаем сразу
-        result = await execute_script(option, client_name)
-        if result["returncode"] == 0:
-            await send_config(message.chat.id, client_name, option)
-            await message.answer("✅ Клиент создан!")
-            await message.answer("Главное меню:", reply_markup=create_main_menu())
-        else:
-=======
     else:
         result = await execute_script(option, client_name)
         if result["returncode"] == 0:
@@ -2071,7 +1925,6 @@ async def handle_client_name(message: types.Message, state: FSMContext):
             await message.answer("Главное меню:", reply_markup=create_main_menu())
         else:
             logger.error(f"Ошибка создания клиента WireGuard: {result['stderr']}")
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
             await message.answer(f"❌ Ошибка: {result['stderr']}")
         await state.clear()
 
@@ -2081,16 +1934,6 @@ async def handle_days(message: types.Message, state: FSMContext):
     """Обрабатывает ввод количества дней для создания клиента в боте."""
     update_admin_info(message.from_user)
     days = message.text.strip()
-<<<<<<< HEAD
-    if days.isdigit() and 1 <= int(days) <= 1825:
-        days = message.text.strip()
-    else:
-        await message.answer(
-            "❌ Некорректное значение! Введите число от 1 до 1825 дней"
-        )
-        return
-
-=======
     
     if days.isdigit() and 1 <= int(days) <= 1825:
         days = message.text.strip()
@@ -2098,28 +1941,21 @@ async def handle_days(message: types.Message, state: FSMContext):
         await message.answer("❌ Некорректное значение! Введите число от 1 до 1825 дней")
         return
     
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
     data = await state.get_data()
     client_name = data["client_name"]
     result = await execute_script("1", client_name, days)
 
     if result["returncode"] == 0:
         await send_config(message.chat.id, client_name, "1")
-<<<<<<< HEAD
-        await message.answer(
-            f"✅ Клиент создан!\n"
-            f"📅 Срок действия: {format_days(int(days))}"
-        )
-=======
         logger.info(f"Клиент OpenVPN создан: {client_name}, срок: {days} дней")
         await message.answer(f"✅ Клиент создан!\n📅 Срок действия: {format_days(int(days))}")
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
         await message.answer("Главное меню:", reply_markup=create_main_menu())
     else:
         logger.error(f"Ошибка создания клиента OpenVPN: {result['stderr']}")
         await message.answer(f"❌ Ошибка: {result['stderr']}")
     
     await state.clear()
+
 
 @dp.message(VPNSetup.deleting_client)
 async def handle_delete_client(message: types.Message, state: FSMContext):
@@ -2188,25 +2024,11 @@ async def send_config(chat_id: int, client_name: str, option: str):
                 ("/root/antizapret/client/amneziawg/antizapret", "AmneziaWG (antizapret)"),
                 ("/root/antizapret/client/amneziawg/vpn", "AmneziaWG (vpn)"),
             ]
-<<<<<<< HEAD
-            pattern = re.compile(
-                rf"(antizapret|vpn)-{re.escape(name_core)}-\([^)]+\)-am\.conf"
-            )
-        else:  # OpenVPN
-            directories = [
-                ("/root/web/openvpn/clients", "OpenVPN (vpn)"),
-            ]
-            pattern = re.compile(
-                rf"{re.escape(client_name)}\.ovpn"
-            )
-
-=======
             pattern = re.compile(rf"(antizapret|vpn)-{re.escape(name_core)}-\([^)]+\)-am.conf")
         else:
             directories = [("/root/web/openvpn/clients", "OpenVPN (vpn)")]
             pattern = re.compile(rf"{re.escape(client_name)}.ovpn")
         
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
         timeout = 25
         interval = 0.5
         files_found = []
@@ -2322,58 +2144,10 @@ def format_speed(bits_per_second):
     else:
         return f"{bits_per_second / 1000**3:.2f} Гбит/с"
 
-async def get_network_speed(interface: str = None, interval: float = 1.0):
-    """
-    Измеряет текущую скорость сети (загрузка/выгрузка) в байтах в секунду.
-    """
-    try:
-        # Если интерфейс не указан, определяем основной
-        if not interface:
-            interfaces = psutil.net_io_counters(pernic=True)
-            if not interfaces:
-                return 0, 0
-            # Выбираем интерфейс с наибольшим трафиком
-            interface = max(interfaces.items(), key=lambda x: x[1].bytes_recv + x[1].bytes_sent)[0]
-
-        # Первый замер
-        net_start = psutil.net_io_counters(pernic=True).get(interface)
-        if not net_start:
-            return 0, 0
-            
-        await asyncio.sleep(interval)
-        
-        # Второй замер
-        net_end = psutil.net_io_counters(pernic=True).get(interface)
-        if not net_end:
-            return 0, 0
-
-        # ✅ Сразу считаем в битах (байты * 8)
-        download_bits = ((net_end.bytes_recv - net_start.bytes_recv) / interval) * 8
-        upload_bits = ((net_end.bytes_sent - net_start.bytes_sent) / interval) * 8
-
-        return max(0, download_bits), max(0, upload_bits)
-    except Exception:
-        return 0, 0
-
-def format_speed(bits_per_second):
-    """Форматирует скорость в битах (Кбит/с, Мбит/с, Гбит/с)."""
-    if bits_per_second < 1000:
-        return f"{bits_per_second:.1f} бит/с"
-    elif bits_per_second < 1000**2:  # ✅ 1000 в квадрате (1 000 000)
-        return f"{bits_per_second / 1000:.1f} Кбит/с"
-    elif bits_per_second < 1000**3:  # ✅ 1000 в кубе (1 000 000 000)
-        return f"{bits_per_second / 1000**2:.1f} Мбит/с"
-    else:
-        return f"{bits_per_second / 1000**3:.2f} Гбит/с" # ✅ Ваш вариант
 
 async def get_server_stats():
-<<<<<<< HEAD
-    """Получает статистику сервера с текущей скоростью сети."""
-    try:        
-=======
     """Получает статистику сервера."""
     try:
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
         cpu_percent = psutil.cpu_percent(interval=1)
         memory = psutil.virtual_memory()
         memory_percent = memory.percent
@@ -2390,31 +2164,6 @@ async def get_server_stats():
 
         download_speed, upload_speed = await get_network_speed(main_interface, interval=1.0)
 
-<<<<<<< HEAD
-        # ✅ Получение текущей скорости (асинхронно, не блокирует бота)
-        download_speed, upload_speed = await get_network_speed(main_interface, interval=1.0)
-
-        file_paths = Config.LOG_FILES
-        vpn_clients = count_online_clients(file_paths)
-        openvpn_count = vpn_clients.get('OpenVPN', 0)
-        clients_section = f"{openvpn_count} шт." if openvpn_count > 0 else "0 шт."
-#        clients_section = format_vpn_clients(vpn_clients)
-
-        stats_text = f"""
-<b>📊 Статистика сервера: </b>
-
-{get_color_by_percent(cpu_percent)} <b>ЦП:</b> {cpu_percent:>5}%
-{get_color_by_percent(memory_percent)} <b>ОЗУ:</b> {memory_percent:>5}%
-<b>👥 Онлайн: </b> {clients_section}
-<b>💿 Диск:</b> {disk_used:.1f}/{disk_total:.1f} GB
-<b>⏱️ Uptime:</b> {uptime}
-
-🌐 <b>Сеть ({main_interface or 'N/A'}):</b>
-   ⬇ <b>Скорость:</b> {format_speed(download_speed)}
-   ⬆ <b>Скорость:</b> {format_speed(upload_speed)}
-  💾 <b>Всего:</b> ⬇ {stats.bytes_recv / (1024**3):.2f} GB / ⬆ {stats.bytes_sent / (1024**3):.2f} GB
-
-=======
         file_paths = Config.LOG_FILES
         vpn_clients = count_online_clients(file_paths)
         openvpn_count = vpn_clients.get('OpenVPN', 0)
@@ -2430,7 +2179,6 @@ async def get_server_stats():
 🌐 Сеть ({main_interface or 'N/A'}):
 ⬇ Скорость: {format_speed(download_speed)}
 ⬆ Скорость: {format_speed(upload_speed)}
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 """
         if stats:
             stats_text += f"💾 Всего: ⬇ {stats.bytes_recv / (1024**3):.2f} GB / ⬆ {stats.bytes_sent / (1024**3):.2f} GB\n"
@@ -2504,13 +2252,8 @@ def get_openvpn_online_clients():
             logger.debug(f"Файл логов не найден: {file_path}")
             continue
         except Exception as e:
-<<<<<<< HEAD
-            print(f"Ошибка чтения {file_path}: {e}")
-    
-=======
             logger.error(f"Ошибка чтения {file_path}: {e}")
 
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
     return sorted(clients)
 
 
@@ -2582,14 +2325,6 @@ async def get_online_clients_text():
         lines.extend([f"• {client}" for client in openvpn_clients])
     else:
         lines.append("<b>OpenVPN:</b> нет активных клиентов")
-<<<<<<< HEAD
-    lines.append("")
-#    if wg_clients:
-#        lines.append("<b>WireGuard:</b>")
-#        lines.extend([f"• {client}" for client in wg_clients])
-#    else:
-#        lines.append("<b>WireGuard:</b> нет активных клиентов")
-=======
     
     lines.append(" ")
     
@@ -2599,7 +2334,6 @@ async def get_online_clients_text():
 #    else:
 #        lines.append("WireGuard: нет активных клиентов")
     
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
     return "\n".join(lines)
 
 
@@ -2662,27 +2396,15 @@ def get_main_interface():
 
 def format_vpn_clients(clients_dict):
     """Форматирует словарь клиентов в красивую строку."""
-<<<<<<< HEAD
-    
-#    total = clients_dict['WireGuard'] + clients_dict['OpenVPN']
-    total = clients_dict['OpenVPN']
-    
-=======
     wg_count = clients_dict.get('WireGuard', 0)
     ov_count = clients_dict.get('OpenVPN', 0)
     total = wg_count + ov_count
 
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
     if total == 0:
         return "0 шт."
 
     lines = []
     
-<<<<<<< HEAD
-    return f"""
-# ├ <b>WireGuard:</b> {clients_dict['WireGuard']} шт.
-└ <b>OpenVPN:</b> {clients_dict['OpenVPN']} шт."""
-=======
     # Показываем WireGuard только если есть клиенты
     if wg_count > 0:
         lines.append(f"├ WireGuard: {wg_count} шт.")
@@ -2692,7 +2414,6 @@ def format_vpn_clients(clients_dict):
         lines.append(f"└ OpenVPN: {ov_count} шт.")
 
     return "\n" + "\n".join(lines) if lines else "0 шт."
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 
 
 # ============================================================================

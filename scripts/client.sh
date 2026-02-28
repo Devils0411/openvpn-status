@@ -226,16 +226,6 @@ deleteOpenVPN(){
 }
 
 listOpenVPN(){
-<<<<<<< HEAD
-	[[ -n "$CLIENT_NAME" ]] && return
-	echo
-	echo 'OpenVPN client names:'
-	ls $DIR_OPENVPN/clients | sed 's/\.ovpn$//' | grep -v "^antizapret-server$" | sort
-}
-
-
-if ! [[ "$OPTION" =~ ^[1-3]$ ]]; then
-=======
     [[ -n "$CLIENT_NAME" ]] && return
     echo
     echo 'OpenVPN client names:'
@@ -293,21 +283,14 @@ listWireGuard(){
 
 
 if ! [[ "$OPTION" =~ ^[1-6]$ ]]; then
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 	echo
 	echo 'Please choose option:'
 	echo '    1) OpenVPN - Добавление/Обновление сертификата клиента'
 	echo '    2) OpenVPN - Удаление клиента'
-<<<<<<< HEAD
-	echo '    3) OpenVPN - список склиентов'
-	until [[ "$OPTION" =~ ^[1-3]$ ]]; do
-		read -rp 'Option choice [1-3]: ' -e OPTION
-=======
 	echo '    3) OpenVPN - список клиентов'
 	echo '    6) WireGuard - список клиентов'
 	until [[ "$OPTION" =~ ^[1-6]$ ]]; do
 		read -rp 'Option choice [1-6]: ' -e OPTION
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 	done
 fi
 
@@ -327,12 +310,9 @@ case "$OPTION" in
 		echo 'OpenVPN - List clients'
 		listOpenVPN
 		;;
-<<<<<<< HEAD
-=======
 	6)
 		echo 'WireGuard - List clients'
 		listWireGuard
 		;;
->>>>>>> 96a156b (🤖 Auto-update: 2026-02-28 21:05:20)
 esac
 exit 0
