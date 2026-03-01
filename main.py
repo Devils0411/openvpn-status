@@ -1260,26 +1260,26 @@ def count_online_clients(file_paths):
     results = {}
 
     # Подсчёт WireGuard
-    try:
-        wg_output = subprocess.check_output(["/usr/bin/wg", "show"], text=True)
-        wg_latest_handshakes = re.findall(r"latest handshake: (.+)", wg_output)
+#    try:
+#        wg_output = subprocess.check_output(["/usr/bin/wg", "show"], text=True)
+#        wg_latest_handshakes = re.findall(r"latest handshake: (.+)", wg_output)
 
-        online_wg = 0
-        for handshake in wg_latest_handshakes:
-            handshake_str = handshake.strip()
-            if handshake_str == "0 seconds ago":
-                online_wg += 1
-            else:
-                try:
+#        online_wg = 0
+#        for handshake in wg_latest_handshakes:
+#            handshake_str = handshake.strip()
+#            if handshake_str == "0 seconds ago":
+#                online_wg += 1
+#            else:
+#                try:
                     # Используем parse_relative_time и is_peer_online для определения онлайн-статуса
-                    handshake_time = parse_relative_time(handshake_str)
-                    if is_peer_online(handshake_time):
-                        online_wg += 1
-                except Exception:
-                    continue
-        results["WireGuard"] = online_wg
-    except Exception:
-        results["WireGuard"] = 0  # или f"Ошибка: {e}" по желанию
+#                    handshake_time = parse_relative_time(handshake_str)
+#                    if is_peer_online(handshake_time):
+#                        online_wg += 1
+#                except Exception:
+#                    continue
+#        results["WireGuard"] = online_wg
+#    except Exception:
+#        results["WireGuard"] = 0  # или f"Ошибка: {e}" по желанию
 
     # Подсчёт OpenVPN
     for path, _ in file_paths:
